@@ -8,7 +8,7 @@ RUN mvn package
 FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/target/*shaded*.jar app.jar
 
 EXPOSE 8000
 
