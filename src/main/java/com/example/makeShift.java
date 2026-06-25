@@ -5,15 +5,20 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-
 
 //javaで使うもの
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
+import java.awt.Font;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,6 +38,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
+import javax.imageio.ImageIO;
 
 class Person
 {
@@ -53,6 +59,12 @@ public class makeShift
     //人数上限，回数上限の設定
     static int slotLimit = 2;
     static int dailyLimit =  2;
+    //時間帯準の固定
+    static List<String> allTimes = new ArrayList<>();
+    //表の枠の固定
+    static List<String> allDates = new ArrayList<>();
+    //おおもとのシフト表を保存
+    static Map<String,Map<String,List<String>>> currentShiftTable = new LinkedHashMap<>();
     //複数選択を可読にするためのメソッド
     public static List<String> parseCsvLine(String line)
     {
@@ -111,7 +123,7 @@ public class makeShift
             if(parts.length == 2)
             {
                 int month = Integer.parseInt(parts[0]);
-                int day = Integer.parseInt(parts[1]);
+                int day = Integer.parseInt(parts[1].replaceAll("\\(.*\\)",""));
                 formattedDate = String.format("%02d%02d", month,day);
             }
             String fileName ="shift_" + formattedDate + "_" + currentSheetId + ".dat";
@@ -135,6 +147,38 @@ public class makeShift
             System.out.println("読み込み" + fileName);
         }
         catch(Exception e){e.printStackTrace();}
+    }
+
+    //シフト表のレイアウト用のクラス
+    static class LayoutInfo
+    {
+        int horizontalOffset = 1;
+        int verticalOffset = 2;
+        int timeWidth = 140;
+        int personWidth = 110;
+        int rowHeight = 28;
+        int tableWidth(){return slotLimit+1;}
+        int tableHeight(){return allTimes.size()+1;}
+        int startCol(int d)
+        {
+            int columnBlock = (d<3)?0:1;
+            return columnBlock*(slotLimit+2) + horizontalOffset;
+        }
+        int startRow(int d)
+        {
+            int rowBlock = (d<3)? d:d-3;
+            return rowBlock*(tableHeight()+1) + verticalOffset;
+        }
+        int x(int d)
+        {
+            int columnBlock = (d<3)?0:1;
+            int tablePixcelWidth = timeWidth + slotLimit*personWidth;
+            return columnBlock*(tablePixcelWidth+80);
+        }
+        int y(int d)
+        {
+            return (startRow(d) - verticalOffset)*rowHeight;
+        }
     }
     public static void main(String[]args) throws IOException
     {
@@ -291,8 +335,8 @@ public class makeShift
 
                 //ヘッダーを解析
                 List<String> headerColumns = parseCsvLine(header);
-                //表示順を固定するためのリスト生成
-                List<String> allTimes = new ArrayList<>();
+                //表示順を調整する
+                allTimes.clear();
                 //人別に処理
                 for(int i = 1; i < rows.length; i++)
                 {
@@ -403,6 +447,22 @@ public class makeShift
                     }
                 }
                 
+                //日付一覧を保存する
+                allDates.clear();
+                for(String date : shiftTable.keySet()){allDates.add(date);}
+
+                //シフト表を保存
+                currentShiftTable.clear();
+                for(String date : shiftTable.keySet())
+                {
+                    Map<String,List<String>> copiedDateMap = new LinkedHashMap<>();
+                    for(String time : shiftTable.get(date).keySet())
+                    {
+                        copiedDateMap.put(time,new ArrayList<>(shiftTable.get(date).get(time)));
+                    }
+                    currentShiftTable.put(date,copiedDateMap);
+                }
+
                 //日別にボタンとプレビューを扱う用
                 Map<String,StringBuilder> shiftResultMap = new LinkedHashMap<>();
                 Map<String,StringBuilder> previewTableMap = new LinkedHashMap<>();
@@ -572,9 +632,17 @@ public class makeShift
 
                 //エクセル出力用ボタン生成
                 allShiftTables.append(
+                    "<div style='display:flex; gap:10px; margin-bottom15px;'>" +
+
                     "<form method='POST' action='/export'>" +
                     "<input type='submit' value='Excel出力'>" +
-                    "</form><br>"
+                    "</form>" +
+
+                    "<form method='POST' action='/exportImage'>" +
+                    "<input type='submit' value='画像として保存'>" +
+                    "</form>" +
+
+                    "</div>"
                 );
                 
                 boolean firstButton = true;
@@ -653,7 +721,9 @@ public class makeShift
                         "for(var i=0;i<buttons.length;i++){buttons[i].style.background='#f0f0f0';}" +
                         "document.getElementById(tabId).style.display='block';" + 
                         "document.getElementById(buttonId).style.background='#808080';" +
-                    "}" +
+                        "localStorage.setItem('activeTab',tabId);" +
+                        "localStorage.setItem('activeButton',buttonId);" +
+                        "}" +
                     "async function assignedPerson(date,time,person){" +
                         "const params =" + 
                         "'date='+encodeURIComponent(date)" +
@@ -674,6 +744,12 @@ public class makeShift
                     "location.reload();" +
                     "}" +
 
+                    "window.onload = function()" +
+                    "{" +
+                        "var tabId = localStorage.getItem('activeTab');" +
+                        "var buttonId = localStorage.getItem('activeButton');" +
+                        "if(tabId && buttonId){openTab(tabId,buttonId);}" +
+                    "}" +
                     "</script>" +
                     "</head>" +
 
@@ -743,68 +819,359 @@ public class makeShift
         //シフト表をExcelで出力する用
         server.createContext("/export",(HttpExchange exchange) ->
         {
-            Workbook workbook = new XSSFWorkbook();
-            Sheet sheet = workbook.createSheet("シフト表");
-
-            //日付用のスタイル
-            CellStyle dateStyle = workbook.createCellStyle();
-            dateStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
-            dateStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-            //ヘッダーの設定
-            int rowIndex = 0;
-
-            for(String date : assignedShift.keySet())
+            //エラー確認用
+            try
             {
-                //日付の表示
-                Row dateRow = sheet.createRow(rowIndex++);
-                Cell dateCell = dateRow.createCell(0);
-                dateCell.setCellValue(date);
-                dateCell.setCellStyle(dateStyle);
-                //時間帯の表示
-                Map<String,List<String>> dateMap = assignedShift.get(date);
-                for(String time : dateMap.keySet())
+                //レイアウト用クラス呼び出し
+                LayoutInfo layout = new LayoutInfo();
+                System.out.println("=== EXPORT START ===");
+                System.out.println("Workbook作成前");
+
+                Workbook workbook = new XSSFWorkbook();
+                System.out.println("Workbook作成後");
+
+                Sheet sheet = workbook.createSheet("シフト表");
+           
+                //背景色を白にするための下準備
+                CellStyle whiteStyle = workbook.createCellStyle();
+                whiteStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+                whiteStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                whiteStyle.setAlignment(HorizontalAlignment.CENTER);
+                //枠線をつけるための下準備
+                CellStyle borderStyle = workbook.createCellStyle();
+                borderStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+                borderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);  
+                borderStyle.setBorderTop(BorderStyle.THIN);
+                borderStyle.setBorderBottom(BorderStyle.THIN);
+                borderStyle.setBorderLeft(BorderStyle.THIN);
+                borderStyle.setBorderRight(BorderStyle.THIN);
+                borderStyle.setAlignment((HorizontalAlignment.CENTER));
+                //日付セルを着色するための下準備
+                CellStyle dateStyle = workbook.createCellStyle();
+                dateStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
+                dateStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                dateStyle.setAlignment(HorizontalAlignment.CENTER);
+
+                //表の配置設定
+                int horizontalOffset = 1;
+                int verticalOffset = 2;
+                int maxTableRows = allTimes.size()+1;
+                int margin = 1;
+                int firstRow = verticalOffset - margin;
+                int firstCol = horizontalOffset - margin;
+                int lastRow = verticalOffset + 2*(maxTableRows+1) + maxTableRows-1 + margin;
+                int lastCol = horizontalOffset + (slotLimit+2) + slotLimit + margin;
+
+                //背景色を白にする
+                for(int r = firstRow; r<=lastRow; r++)
                 {
-                    Row row = sheet.createRow(rowIndex++);
-                    Cell timeCell = row.createCell(0);
-                    timeCell.setCellValue(time);
-                    List<String> persons = dateMap.get(time);
-                    for(int i = 0; i<persons.size(); i++)
+                    Row row = sheet.getRow(r);
+                    if(row == null){row = sheet.createRow(r);}
+                
+                    for(int c = firstCol; c<=lastCol; c++)
                     {
-                        Cell personCell = row.createCell(i + 1);
-                        personCell.setCellValue(persons.get(i));
+                        Cell cell = row.getCell(c);
+                        if(cell == null){cell = row.createCell(c);}
+                    
+                        cell.setCellStyle(whiteStyle);
                     }
                 }
-                rowIndex++;
-            }
 
-            //列幅自動調整用のおまじない
-            int columnCount = slotLimit + 1;
-            for(int col = 0; col<columnCount; col++)
+                //シフト表を生成
+                List<String> dates = new ArrayList<>(currentShiftTable.keySet());
+            
+                //エラー確認用
+                System.out.println("dates.size=" + dates.size());
+                System.out.println("allTimes.size=" + allTimes.size());
+            
+                for(int d = 0; d<dates.size(); d++)
+                {
+                    //エラー確認用
+                    System.out.println("processing date=" + dates.get(d));
+                
+                    String date = dates.get(d);
+
+                    //左右の列感覚の調整
+                    int startCol = layout.startCol(d);
+                    int startRow = layout.startRow(d);
+
+                    Map<String,List<String>> assignedDateMap = assignedShift.get(date);
+                    if(assignedDateMap == null){assignedDateMap = new LinkedHashMap<>();}
+
+                    Row dateRow = sheet.getRow(startRow);
+                    if(dateRow == null){dateRow = sheet.createRow(startRow);}
+                    Cell dateCell = dateRow.createCell(startCol);
+                    dateCell.setCellValue(date);
+
+                    int currentRow = startRow+1;
+                    for(String time : allTimes)
+                    {
+                        Row row = sheet.getRow(currentRow);
+                        if(row == null){row = sheet.createRow(currentRow);}
+
+                        Cell timeCell = row.createCell(startCol);
+                        timeCell.setCellValue(time);
+
+                        List<String> persons = assignedDateMap.get(time);
+                        if(persons != null)
+                        {
+                            for(int i =0; i<persons.size(); i++)
+                            {
+                                Cell personCell = row.createCell(startCol+i+1);
+                                personCell.setCellValue(persons.get(i));
+                            }
+                        }
+                        currentRow++;
+                    }
+                }
+            
+            
+
+                //シフト表に枠線をつける
+                for(int d = 0; d<dates.size(); d++)
+                {
+                    int columnBlock;
+                    int rowBlock;
+
+                    if(d<3)
+                    {
+                        columnBlock = 0;
+                        rowBlock = d;
+                    }
+                    else
+                    {
+                        columnBlock = 1;
+                        rowBlock = d-3;
+                    }
+
+                    int startCol = columnBlock*(slotLimit+2)+horizontalOffset;
+                    int startRow = rowBlock*(maxTableRows+1)+verticalOffset;
+
+                    for(int r = startRow+1; r<=startRow+allTimes.size(); r++)
+                    {
+                        Row row = sheet.getRow(r);
+                        for(int c = startCol; c<=startCol+slotLimit; c++)
+                        {
+                            Cell cell = row.getCell(c);
+                            if(cell == null){cell = row.createCell(c);}
+                            cell.setCellStyle(borderStyle);
+                        }
+                    }
+                }
+
+                //日付セルを水色に着色
+                for(int d = 0; d<dates.size(); d++)
+                {
+                    int columnBlock;
+                    int rowBlock;
+
+                    if(d<3)
+                    {
+                        columnBlock = 0;
+                        rowBlock = d;
+                    }
+                    else
+                    {
+                        columnBlock = 1;
+                        rowBlock = d-3;
+                    }
+
+                    int startCol = columnBlock*(slotLimit+2)+horizontalOffset;
+                    int startRow = rowBlock*(maxTableRows+1)+verticalOffset;
+
+                    Row row = sheet.getRow(startRow);
+                    if(row == null){row = sheet.createRow(startRow);}
+
+                    Cell dateCell = row.getCell(startCol);
+                    if(dateCell == null){dateCell = row.createCell(startCol);}
+                    dateCell.setCellStyle(dateStyle);
+                }
+
+                //列幅自動調整用のおまじない
+                int centerGapCol = horizontalOffset + slotLimit +1;
+                for(int col = firstCol+1; col<=lastCol-1; col++)
+                {
+                    if(col == centerGapCol){continue;}
+                    sheet.autoSizeColumn(col);
+                    int width = sheet.getColumnWidth(col);
+                    sheet.setColumnWidth(col,Math.min(width+1000,255*256));
+                }
+
+                //作成されるファイル名設定
+                String fileName = "shift.xlsx";
+                if(!dates.isEmpty())
+                {
+                    String firstDate = dates.get(0);
+                    String lastDate = dates.get(dates.size()-1);
+                    String[] firstParts = firstDate.split("/");
+                    String[] lastParts = lastDate.split("/");
+                    String firstName = null;
+                    String lastName = null;
+                    if(firstParts.length == 2)
+                    {
+                        int month = Integer.parseInt(firstParts[0]);
+                        int day = Integer.parseInt(firstParts[1].replaceAll("\\(.*\\)",""));
+
+                        firstName = String.format("%02d%02d",month,day);
+                    }
+                    if(lastParts.length == 2)
+                    {
+                        int month = Integer.parseInt(firstParts[0]);
+                        int day = Integer.parseInt(firstParts[1].replaceAll("\\(.*\\)",""));
+                    
+                        lastName = String.format("%02d%02d",month,day);
+                    }
+                    fileName ="shift_" + firstName + "~" + lastName + ".xlsx";
+                }
+
+                //作成したExcelを書き込む
+                System.out.println("Excel書き込み開始");
+                ByteArrayOutputStream boas = new ByteArrayOutputStream();
+                workbook.write(boas);
+                byte[] excelBytes = boas.toByteArray();
+                System.out.println("Excel書き込み完了");
+                //エラー確認用
+                System.out.println("excelBytes.length=" + excelBytes.length);
+
+                //HTTPのヘッダー設定のためのおまじない
+                exchange.getResponseHeaders().set("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                exchange.getResponseHeaders().set("Content-Disposition","attachment; filename=" + fileName);             
+
+                //ファイルをブラウザへ送信
+                exchange.sendResponseHeaders(200,excelBytes.length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(excelBytes);
+                os.close();
+
+                workbook.close();
+            }
+            catch(Exception e)
             {
-                sheet.autoSizeColumn(col);
-                int width = sheet.getColumnWidth(col);
-                sheet.setColumnWidth(col,Math.min(width + 1000,255*266));
-            }
-
-            //作成したExcelをバイト列に変換する
-            ByteArrayOutputStream boas = new ByteArrayOutputStream();
-            workbook.write(boas);
-            byte[] excelBytes = boas.toByteArray();
-
-            //HTTPのヘッダー設定のためのおまじない
-            exchange.getResponseHeaders().set("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            exchange.getResponseHeaders().set("Content-Disposition","attachment; filename=shift.xlsx");             
-
-            //ファイルをブラウザへ送信
-            exchange.sendResponseHeaders(200,excelBytes.length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(excelBytes);
-            os.close();
-
-            workbook.close();  
+                System.out.println("EXPORT ERROR");
+                e.printStackTrace();
+            }  
         });
         
+        //画像として出力するとき用
+        server.createContext("/exportImage",(HttpExchange exchange) -> 
+        {
+            try
+            {
+                LayoutInfo layout = new LayoutInfo();
+                List<String> dates = new ArrayList<>(currentShiftTable.keySet());
+                int leftMargin =20;
+                int topMargin =20;
+                int maxX = 0;
+                int maxY = 0;
+                for(int d=0; d<dates.size(); d++)
+                {
+                    int x = leftMargin + layout.x(d);
+                    int y = topMargin + layout.y(d);
+                    int width = layout.timeWidth + slotLimit*layout.personWidth;
+                    int height = (allTimes.size()+1)*layout.rowHeight;
+
+                    maxX = Math.max(maxX,x+width);
+                    maxY = Math.max(maxY,y+height);
+                }
+                
+                int imageWidth = maxX + 20;
+                int imageHeight = maxY + 20;
+
+                BufferedImage image = new BufferedImage(imageWidth,imageHeight,BufferedImage.TYPE_INT_RGB);                
+                
+                Graphics2D g = image.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(Color.WHITE);
+                g.fillRect(0,0,imageWidth,imageHeight);
+
+                Font font = new Font("Meiryo",Font.PLAIN,12);
+                Font dateFont = new Font("Meiryo",Font.BOLD,12);
+
+                for(int d = 0; d<dates.size(); d++)
+                {
+                    String date = dates.get(d);
+                    int startX = leftMargin + layout.x(d);
+                    int startY = topMargin + layout.y(d);
+
+                    Map<String,List<String>> assignedDateMap = assignedShift.get(date);
+                    if(assignedDateMap == null){assignedDateMap = new LinkedHashMap<>();}
+
+                    //日付セル
+                    g.setColor(new Color(221,235,247));
+                    g.fillRect(startX,startY,layout.timeWidth,layout.rowHeight);
+                    g.setColor(Color.BLACK);
+                    g.setFont(dateFont);
+                    g.drawString(date,startX+5,startY+18);
+                    g.setFont(font);
+
+                    int rowY = startY + layout.rowHeight;
+                    for(String time : allTimes)
+                    {
+                        //時間帯セル
+                        g.setColor(Color.WHITE);
+                        g.fillRect(startX,rowY,layout.timeWidth,layout.rowHeight);
+                        g.setColor(Color.BLACK);
+                        g.drawRect(startX,rowY,layout.timeWidth,layout.rowHeight);
+                        g.drawString(time,startX+5,rowY+18);
+
+                        List<String> persons = assignedDateMap.get(time);
+                        for(int i=0; i<slotLimit; i++)
+                        {
+                            int x = startX + layout.timeWidth + i*layout.personWidth;
+
+                            g.setColor(Color.WHITE);
+                            g.fillRect(x,rowY,layout.personWidth,layout.rowHeight);
+                            g.setColor(Color.BLACK);
+                            g.drawRect(x,rowY,layout.personWidth,layout.rowHeight);
+
+                            if(persons != null && i<persons.size()){g.drawString(persons.get(i),x+5,rowY+18);}
+                        }
+                        rowY += layout.rowHeight;
+                    }
+                }
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(image,"png",baos);
+                byte[] pngBytes = baos.toByteArray();
+
+                String fileName = "shift.png";
+
+                if(!dates.isEmpty())
+                {
+                    String firstDate = dates.get(0);
+                    String lastDate = dates.get(dates.size()-1);
+                    String[] firstParts = firstDate.split("/");
+                    String[] lastParts = lastDate.split("/");
+                    String firstName = null;
+                    String lastName = null;
+
+                    if(firstParts.length == 2)
+                    {
+                        int month = Integer.parseInt(firstParts[0]);
+                        int day = Integer.parseInt(firstParts[1].replaceAll("\\(.*\\)",""));
+
+                        firstName = String.format("%02d%02d",month,day);
+                    }
+                    if(lastParts.length == 2)
+                    {
+                        int month = Integer.parseInt(lastParts[0]);
+                        int day = Integer.parseInt(lastParts[1].replaceAll("\\(.*\\)",""));
+
+                        lastName = String.format("%02d%02d",month,day);
+                    }
+                    fileName = "shift_" + firstName + "~" + lastName + ".png";
+                }
+                exchange.getResponseHeaders().set("Content-Type","image/png");
+                exchange.getResponseHeaders().set("Content-Disposition","attachment; fileName=" + fileName);
+                exchange.sendResponseHeaders(200,pngBytes.length);
+
+                OutputStream os = exchange.getResponseBody();
+                os.write(pngBytes);
+                os.close();
+
+                g.dispose();
+            }
+            catch(Exception e){e.printStackTrace();}
+        });
 
         server.setExecutor(null);
         server.start();
