@@ -707,47 +707,58 @@ public class makeShift
 
         server.createContext("/assign",(HttpExchange exchange) ->
         {
-            Session session = getsession(exchange);
-  
-            InputStream is = exchange.getRequestBody();
-
-            String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
-
-            Map<String,String> formData = parseFormData(data);
-            
-            String date = formData.get("date");
-            String time = formData.get("time");
-            String person = formData.get("person");
-
-            if(!session.assignedShift.containsKey(date)){session.assignedShift.put(date,new LinkedHashMap<>());}
-            if(!session.assignedShift.get(date).containsKey(time)){session.assignedShift.get(date).put(time,new ArrayList<>());}
-            
-            
-            List<String> assignedList = session.assignedShift.get(date).get(time);
-            
-            //その日の最大担当回数を記録
-            int assignedCount = 0;
-            if(session.assignedShift.containsKey(date))
+            try
             {
-                Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+                Session session = getsession(exchange);
+  
+                InputStream is = exchange.getRequestBody();
 
-                for(List<String> persons : assignedDate.values())
-                {if(persons.contains(person)){assignedCount++;}}
-            }
+                String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
 
-            //登録済みなら解除する
-            if(assignedList.contains(person)){assignedList.remove(person);}
-            //未登録なら登録する
-            else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
+                Map<String,String> formData = parseFormData(data);
+            
+                String date = formData.get("date");
+                String time = formData.get("time");
+                String person = formData.get("person");
 
-            String response= "OK";
+                if(!session.assignedShift.containsKey(date)){session.assignedShift.put(date,new LinkedHashMap<>());}
+                if(!session.assignedShift.get(date).containsKey(time)){session.assignedShift.get(date).put(time,new ArrayList<>());}
+            
+            
+                List<String> assignedList = session.assignedShift.get(date).get(time);
+            
+                //その日の最大担当回数を記録
+                int assignedCount = 0;
+                if(session.assignedShift.containsKey(date))
+                {
+                    Map<String,List<String>> assignedDate = session.assignedShift.get(date);
 
-                exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
-                exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
+                    for(List<String> persons : assignedDate.values())
+                    {if(persons.contains(person)){assignedCount++;}}
+                }
 
+                //登録済みなら解除する
+                if(assignedList.contains(person)){assignedList.remove(person);}
+                //未登録なら登録する
+                else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
+
+                String response= "OK";
+
+                    exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
+                    exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
+
+                    OutputStream os = exchange.getResponseBody();
+                    os.write(response.getBytes(StandardCharsets.UTF_8));
+                    os.close();
+            }catch(Exception e)
+            {
+                e.printStackTrace();
+                String response = "ERROR";
+                exchange.sendResponseHeaders(500,response.length());
                 OutputStream os = exchange.getResponseBody();
                 os.write(response.getBytes(StandardCharsets.UTF_8));
                 os.close();
+            }
         });
 
         //シフト表をExcelで出力する用
