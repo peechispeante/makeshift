@@ -231,7 +231,6 @@ public class makeShift
         //URL入力後のブラウザ画面の構成
         server.createContext("/submit",(HttpExchange exchange) ->
             {
-                System.out.println(exchange.getRequestMethod());
                 Session session = getsession(exchange);
                 InputStream is = exchange.getRequestBody();
                 String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
@@ -683,7 +682,7 @@ public class makeShift
                             "if(res.ok){location.reload();}" +
                             "else{alert('assign failed :' + res.status);" +
                         "}catch(e){alert(e);console.log(e);}" +
-                    "}" +
+                        "}" +
 
                     "window.onload = function()" +
                     "{" +
@@ -747,8 +746,14 @@ public class makeShift
                 //未登録なら登録する
                 else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
 
-                exchange.sendResponseHeaders(204,-1);
-                exchange.close();
+                String response= "OK";
+
+                    exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
+                    exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
+
+                    OutputStream os = exchange.getResponseBody();
+                    os.write(response.getBytes(StandardCharsets.UTF_8));
+                    os.close();
             }catch(Exception e)
             {
                 e.printStackTrace();
