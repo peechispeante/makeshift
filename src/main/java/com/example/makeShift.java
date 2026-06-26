@@ -661,6 +661,7 @@ public class makeShift
                         "localStorage.setItem('activeButton',buttonId);" +
                         "}" +
                     "async function assignedPerson(date,time,person){" +
+                        "alert('クリックされました。')" +
                         "const params =" + 
                         "'date='+encodeURIComponent(date)" +
                         "+'&time='+encodeURIComponent(time)" +
