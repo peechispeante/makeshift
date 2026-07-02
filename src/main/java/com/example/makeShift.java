@@ -103,6 +103,263 @@ public class makeShift
         return result;
     }
 
+    //URLを取得し，スプレッドシートをCSV形式で取得するメソッド
+    public static String[] toCSV(HttpExchange exchange,Session session) throws IOException
+    {
+        InputStream is = exchange.getRequestBody();
+                String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
+
+                Map<String,String> formData = parseFormData(data);
+                String sheetUrl = formData.get("sheetUrl");
+                session.slotLimit = Integer.parseInt(formData.get("slotLimit"));
+                session.dailyLimit = Integer.parseInt(formData.get("dailyLimit"));
+                
+                String[] firstSplit = sheetUrl.split("/d/");
+                if(firstSplit.length<2){throw new IllegalArgumentException("適切なURLを入力してください。");}
+                String afterD = firstSplit[1];
+                String[] secondSplit = afterD.split("/");
+                String sheetId = secondSplit[0];
+
+                //CSVファイルを取得
+                String csvUrl = "https://docs.google.com/spreadsheets/d/" + sheetId + "/export?format=csv";
+                //URLを作成(URIの経由が必要)
+                URL url = URI.create(csvUrl).toURL();
+                //csvを取得するためのReader作成
+                BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(),StandardCharsets.UTF_8));
+                //CSVとして1行ずつ格納
+                StringBuilder csvData = new StringBuilder();
+                String line;
+                while((line = reader.readLine())!= null)
+                {
+                    csvData.append(line);
+                    csvData.append("\n");
+                }
+                reader.close();
+
+                return csvData.toString().split("\n");
+    }
+
+    //個人の回答を解析するメソッド
+    public static List<Person> getPerson(String[] rows,List<String> headerColumns)
+    {
+        List<Person> persons = new ArrayList<>();
+        for(int i = 1; i < rows.length; i++)
+        {
+            String row = rows[i];
+            List<String> columns = parseCsvLine(row);
+            Person person = new Person();
+
+            if(columns.size() < 3){continue;}
+
+            person.grade = columns.get(1);
+            person.name = columns.get(2);
+
+            //日付ごとに回答を読み込む
+            for(int j = 3; j < columns.size(); j++)
+            {
+                String date = headerColumns.get(j);
+                String answer = columns.get(j);
+
+                //新たにtimesリストを追加
+                List<String> times = new ArrayList<>();
+                if(!answer.isEmpty())
+                {
+                    //回答が空欄でないなら,カンマごとに区分する
+                    for(String t : answer.split(","))
+                    {
+                        //空白を除去し，timesリストに追加
+                        String time = t.trim();
+                        //「なし」のみ回答から除外
+                        if(!time.equals("なし")){times.add(time);}                            }
+                }
+                person.Times.put(date,times);
+            }
+            persons.add(person);
+        }      
+        return persons;
+    }
+
+    //全時間帯を取得し，追い出しを左右に分けるメソッド
+    public static void buildAllTimes(List<Person> persons,List<String>headerColumns,Session session)
+    {
+        for(int i =3; i < headerColumns.size(); i++)
+        {
+            String date = headerColumns.get(i);
+            for(Person person : persons)
+            {
+                List<String> times =person.Times.get(date);
+                if(times == null){continue;}
+
+                for(String time : times)
+                {
+                    if("追い出し".equals(time))
+                    {
+                        if(!session.allTimes.contains("追い出し(左)")){session.allTimes.add("追い出し(左)");}
+                        if(!session.allTimes.contains("追い出し(右)")){session.allTimes.add("追い出し(右)");}
+                    }
+                    else
+                    {
+                        if(!session.allTimes.contains(time)){session.allTimes.add(time);}
+                    }
+                }
+            }   
+        }
+    }
+
+    //全員のデータから候補者一覧を生成するメソッド
+    public static Map<String,Map<String,List<String>>> buildShiftTable(List<Person> persons,Session session)
+    {
+        Map<String,Map<String,List<String>>> shiftTable = new LinkedHashMap<>();
+        for(Person person : persons)
+        {
+            //日付ごとに処理
+            for(String date : person.Times.keySet())
+            {
+                //各時間帯を取得，日付がないなら専用のMap生成
+                List<String> times = person.Times.get(date);
+                if(!shiftTable.containsKey(date))
+                {
+                    shiftTable.put(date,new LinkedHashMap<>());
+                }
+
+                //その日の時間帯を取得
+                Map<String,List<String>> dateMap = shiftTable.get(date);
+                for(String time : times)
+                {
+                    if(time.equals("追い出し"))
+                    {
+                        if(!dateMap.containsKey("追い出し(左)"))
+                        {
+                            dateMap.put("追い出し(左)", new ArrayList<>());
+                        }
+
+                        if(!dateMap.containsKey("追い出し(右)"))
+                        {
+                            dateMap.put("追い出し(右)", new ArrayList<>());
+                        }
+
+                        dateMap.get("追い出し(左)").add(person.name);
+                        dateMap.get("追い出し(右)").add(person.name);
+                    }
+                    else
+                    {
+                        if(!dateMap.containsKey(time))
+                        {
+                            dateMap.put(time, new ArrayList<>());
+                        }
+
+                        dateMap.get(time).add(person.name);
+                    }
+                }
+            }
+        }
+        //日付一覧を保存する
+        session.allDates.clear();
+        for(String date : shiftTable.keySet()){session.allDates.add(date);}
+
+        //シフト表を保存
+        session.currentShiftTable.clear();
+        for(String date : shiftTable.keySet())
+        {
+            Map<String,List<String>> copiedDateMap = new LinkedHashMap<>();
+            for(String time : shiftTable.get(date).keySet())
+            {
+                copiedDateMap.put(time,new ArrayList<>(shiftTable.get(date).get(time)));
+            }
+            session.currentShiftTable.put(date,copiedDateMap);
+        }
+        return shiftTable;
+    }
+
+    //追い出しが左右どちらかしか選択できないようにするメソッド
+    public static boolean checkOidashi(Session session,String date,String time,String personName)
+    {
+        if(time.equals("追い出し(左)"))
+        {
+            Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+            if(assignedDate != null)
+            {
+                List<String> rightAssigned = assignedDate.get("追い出し(右)");
+                if(rightAssigned != null && rightAssigned.contains(personName)){return true;}   
+            }
+        }
+        if(time.equals("追い出し(右)"))
+        {
+            Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+            if(assignedDate != null)
+            {
+                List<String> leftAssigned = assignedDate.get("追い出し(左)");                   
+                if(leftAssigned != null && leftAssigned.contains(personName)){return true;}
+            }
+        }
+        return false;
+    }
+
+    //elsx,pngを出力するためのボタン用メソッド
+    public static StringBuilder buildExportButton()
+    {
+        StringBuilder exportButton = new StringBuilder();
+        exportButton.append(
+            "<div style='display:flex; gap:10px; margin-bottom:15px;'>" +
+
+            "<form method='POST' action='/export'>" +
+            "<input type='submit' value='Excel出力'>" +
+            "</form>" +
+
+            "<form method='POST' action='/exportImage'>" +
+            "<input type='submit' value='画像として保存'>" +
+            "</form>" +
+
+            "</div>"
+        );
+        return exportButton;
+    }
+
+    //シフト表プレビュー生成用メソッド
+    public static Map<String,StringBuilder> buildPreviewTable(Session session,Map<String,Map<String,List<String>>> shiftTable)
+    {
+        Map<String,StringBuilder> previewTableMap = new LinkedHashMap<>();
+        for(String date : shiftTable.keySet())
+        {
+            StringBuilder previewTable = new StringBuilder();
+
+            previewTable.append("<table border='1' style='border-collapse; text-align:center;'>");
+            previewTable.append("<tr>");
+            previewTable.append("<th></th>");
+
+            for(int i = 1; i <= session.slotLimit; i++){previewTable.append("<th></th>");}
+
+            previewTable.append("</tr>");
+
+            for(String time : session.allTimes)
+            {
+                List<String> assignedPersons = new ArrayList<>();
+
+                if(session.assignedShift.containsKey(date))
+                {
+                    Map<String,List<String>> dateMapAssigned = session.assignedShift.get(date);
+                    if(dateMapAssigned.containsKey(time)){assignedPersons = dateMapAssigned.get(time);}
+                }
+
+                previewTable.append("<tr>");
+                previewTable.append("<td>");
+                previewTable.append(time);
+                previewTable.append("</td>");
+
+                for(int i = 0; i < session.slotLimit; i++)
+                {
+                    previewTable.append("<td style='min-width:90px;'>");
+                    if(i < assignedPersons.size()){previewTable.append(assignedPersons.get(i));}
+                    previewTable.append("</td>");
+                }
+                previewTable.append("</tr>");
+            }
+            previewTable.append("</table><br></br>");
+            previewTableMap.put(date,previewTable);
+        }
+        return previewTableMap;
+    }
+
     //Sessionを取得する
     public static Session getSession(String sessionId)
     {
@@ -186,45 +443,31 @@ public class makeShift
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT","8000"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port),0);
 
+        //CSSを扱うためのコンテキスト
+        server.createContext("/style.css",(HttpExchange exchange) ->
+        {
+            InputStream is = makeShift.class.getResourceAsStream("/style.css");
+            byte[] css = is.readAllBytes();
+            is.close();
+
+            exchange.getResponseHeaders().set("Content-Type","text/css; charset=UTF-8");
+            exchange.sendResponseHeaders(200,css.length);
+
+            OutputStream os = exchange.getResponseBody();
+            os.write(css);
+            os.close();
+        });
+
         //URL入力前のブラウザ画面の構成
         server.createContext("/",(HttpExchange exchange) ->
         {
-            String response =
-                "<html>" + 
-                "<head>" +
-                "<meta charset='UTF-8'>" +
-                "<title>シフト作成</title>" +
-                "</head>" + 
-                "<body>" +
-                "<form method='POST' action='/submit'>" +
-                "<input type='text' " +
-                "name='sheetUrl' " +
-                "size='80' " +
-                "placeholder='Google SpreadsheetのURLを入力してください。'> " +
-                "<br><br>" +
-                
-                "各時間帯の最大人数を整数で入力してください。" + 
-                "<input type='number' " + 
-                "name='slotLimit' " + 
-                "value='2' " + 
-                "min='1'>" +
-                "<br><br>" +
+            InputStream is = makeShift.class.getResourceAsStream("/home.html");
+            String response = new String(is.readAllBytes(),StandardCharsets.UTF_8);
 
-                "同じ日の最大担当回数を整数で入力してください。" + 
-                "<input type='number' " +
-                "name='dailyLimit' " +
-                "value='2' " +
-                "min='1'>" +
-
-                "<input type='submit' value='送信'>" +
-                "</form>" +
-                "<br><br>" +
-                "</body>" + 
-                "</html>";
-
-            exchange.sendResponseHeaders(200,response.getBytes().length);
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,bytes.length);
             OutputStream os = exchange.getResponseBody();
-            os.write(response.getBytes());
+            os.write(bytes);
             os.close();
         });
 
@@ -232,176 +475,24 @@ public class makeShift
         server.createContext("/submit",(HttpExchange exchange) ->
             {
                 Session session = getsession(exchange);
-                InputStream is = exchange.getRequestBody();
-                String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
-
-                Map<String,String> formData = parseFormData(data);
-                String sheetUrl = formData.get("sheetUrl");
-                session.slotLimit = Integer.parseInt(formData.get("slotLimit"));
-                session.dailyLimit = Integer.parseInt(formData.get("dailyLimit"));
-                
-                String[] firstSplit = sheetUrl.split("/d/");
-                if(firstSplit.length<2){throw new IllegalArgumentException("適切なURLを入力してください。");}
-                String afterD = firstSplit[1];
-                String[] secondSplit = afterD.split("/");
-                String sheetId = secondSplit[0];
-
-                //CSVファイルを取得
-                String csvUrl = "https://docs.google.com/spreadsheets/d/" + sheetId + "/export?format=csv";
-                //URLを作成(URIの経由が必要)
-                URL url = URI.create(csvUrl).toURL();
-                //csvを取得するためのReader作成
-                BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(),StandardCharsets.UTF_8));
-                //CSVとして1行ずつ格納
-                StringBuilder csvData = new StringBuilder();
-                String line;
-                while((line = reader.readLine())!= null)
-                {
-                    csvData.append(line);
-                    csvData.append("\n");
-                }
-                reader.close();
-
-                String[] rows = csvData.toString().split("\n");
+                //toCSVメソッドを呼び出す
+                String[] rows = toCSV(exchange,session);
                 //ヘッダーを取り出す
                 if(rows.length == 0){ throw new RuntimeException("データが存在しません。");}
                 String header = rows[0];
-                //人ごとに読み込む
-                List<Person> persons = new ArrayList<>();
-
                 //ヘッダーを解析
                 List<String> headerColumns = parseCsvLine(header);
                 //表示順を調整する
                 session.allTimes.clear();
-                //人別に処理
-                for(int i = 1; i < rows.length; i++)
-                {
-                    String row = rows[i];
-                    List<String> columns = parseCsvLine(row);
-                    Person person = new Person();
-
-                    if(columns.size() < 3){continue;}
-
-                    person.grade = columns.get(1);
-                    person.name = columns.get(2);
-
-                    //日付ごとに回答を読み込む
-                    for(int j = 3; j < columns.size(); j++)
-                    {
-                        String date = headerColumns.get(j);
-                        String answer = columns.get(j);
-
-                        //新たにtimesリストを追加
-                        List<String> times = new ArrayList<>();
-                        if(!answer.isEmpty())
-                        {
-                            //回答が空欄でないなら,カンマごとに区分する
-                            for(String t : answer.split(","))
-                            {
-                                //空白を除去し，timesリストに追加
-                                String time = t.trim();
-                                //「なし」のみ回答から除外
-                                if(!time.equals("なし")){times.add(time);}
-                            }
-                        }
-
-                        person.Times.put(date,times);
-                    }
-
-                    persons.add(person);
-                }
-                
-                for(int i =3; i < headerColumns.size(); i++)
-                {
-                    String date = headerColumns.get(i);
-                    for(Person person : persons)
-                    {
-                        List<String> times =person.Times.get(date);
-                        if(times == null){continue;}
-
-                        for(String time : times)
-                        {
-                            if("追い出し".equals(time))
-                            {
-                                if(!session.allTimes.contains("追い出し(左)")){session.allTimes.add("追い出し(左)");}
-                                if(!session.allTimes.contains("追い出し(右)")){session.allTimes.add("追い出し(右)");}
-                            }
-                            else
-                            {
-                                if(!session.allTimes.contains(time)){session.allTimes.add(time);}
-                            }
-                        }
-                    }   
-                }
-
-                
-
-                //表を保存するためのMap生成
-                Map<String,Map<String,List<String>>> shiftTable = new LinkedHashMap<>();
-                //全員に対し処理を行う
-                for(Person person : persons)
-                {
-                    //日付ごとに処理
-                    for(String date : person.Times.keySet())
-                    {
-                        //各時間帯を取得，日付がないなら専用のMap生成
-                        List<String> times = person.Times.get(date);
-                        if(!shiftTable.containsKey(date))
-                        {
-                            shiftTable.put(date,new LinkedHashMap<>());
-                        }
-
-                        //その日の時間帯を取得
-                        Map<String,List<String>> dateMap = shiftTable.get(date);
-                        for(String time : times)
-                        {
-                            if(time.equals("追い出し"))
-                            {
-                                if(!dateMap.containsKey("追い出し(左)"))
-                                {
-                                    dateMap.put("追い出し(左)", new ArrayList<>());
-                                }
-
-                                if(!dateMap.containsKey("追い出し(右)"))
-                                {
-                                    dateMap.put("追い出し(右)", new ArrayList<>());
-                                }
-
-                                dateMap.get("追い出し(左)").add(person.name);
-                                dateMap.get("追い出し(右)").add(person.name);
-                            }
-                            else
-                            {
-                                if(!dateMap.containsKey(time))
-                                {
-                                    dateMap.put(time, new ArrayList<>());
-                                }
-
-                                dateMap.get(time).add(person.name);
-                            }
-                        }
-                    }
-                }
-                
-                //日付一覧を保存する
-                session.allDates.clear();
-                for(String date : shiftTable.keySet()){session.allDates.add(date);}
-
-                //シフト表を保存
-                session.currentShiftTable.clear();
-                for(String date : shiftTable.keySet())
-                {
-                    Map<String,List<String>> copiedDateMap = new LinkedHashMap<>();
-                    for(String time : shiftTable.get(date).keySet())
-                    {
-                        copiedDateMap.put(time,new ArrayList<>(shiftTable.get(date).get(time)));
-                    }
-                    session.currentShiftTable.put(date,copiedDateMap);
-                }
+                //getPersonメソッドを呼び出す
+                List<Person>persons = getPerson(rows,headerColumns);
+                //buildAllTimesメソッドを呼び出す
+                buildAllTimes(persons,headerColumns,session);
+                //buildShiftTableメソッドを呼び出す
+                Map<String,Map<String,List<String>>> shiftTable = buildShiftTable(persons,session);
 
                 //日別にボタンとプレビューを扱う用
                 Map<String,StringBuilder> shiftResultMap = new LinkedHashMap<>();
-                Map<String,StringBuilder> previewTableMap = new LinkedHashMap<>();
                 
                 //表生成の確認用
                 for(String date : shiftTable.keySet())
@@ -416,9 +507,7 @@ public class makeShift
                     //ボタンの動作に関するコード
                     for(String time : session.allTimes)
                     {
-                        shiftResult.append("<b>");
-                        shiftResult.append(time);
-                        shiftResult.append("</b><br>");
+                        shiftResult.append("<b>" + time + "</b><br>");
                         //nullエラー対策
                         List<String> candidates = dateMap.get(time);
                         //担当者の表示
@@ -471,29 +560,9 @@ public class makeShift
                                 boolean full = assigned != null && assigned.size() >=session.slotLimit;
 
                                 boolean overDaily = assignedCount >= session.dailyLimit;
-                                
-                                
-                                //追い出し関連
-                                boolean selectedOtherOidashi = false;
-
-                                if(time.equals("追い出し(左)"))
-                                {
-                                    Map<String,List<String>> assignedDate = session.assignedShift.get(date);
-                                    if(assignedDate != null)
-                                    {
-                                        List<String> rightAssigned = assignedDate.get("追い出し(右)");
-                                        if(rightAssigned != null && rightAssigned.contains(personName)){selectedOtherOidashi = true;}   
-                                    }
-                                }
-                                if(time.equals("追い出し(右)"))
-                                {
-                                    Map<String,List<String>> assignedDate = session.assignedShift.get(date);
-                                    if(assignedDate != null)
-                                    {
-                                        List<String> leftAssigned = assignedDate.get("追い出し(左)");
-                                        if(leftAssigned != null && leftAssigned.contains(personName)){selectedOtherOidashi = true;}
-                                    }
-                                }
+                                        
+                                //追い出し関連のcheckOidashiメソッド呼び出し
+                                boolean selectedOtherOidashi = checkOidashi(session,date,time,personName);
 
                                 String disabled = "";
                                 
@@ -518,68 +587,14 @@ public class makeShift
                     shiftResult.append("<br>");
                     shiftResultMap.put(date,shiftResult);
                 }
-
-                //シフト表作成
-                for(String date : shiftTable.keySet())
-                {
-                StringBuilder previewTable = new StringBuilder();
-
-                    previewTable.append("<table border='1'>");
-
-                    previewTable.append("<tr>");
-                    previewTable.append("<th></th>");
-
-                    for(int i = 1; i <= session.slotLimit; i++){previewTable.append("<th></th>");}
-
-                    previewTable.append("</tr>");
-
-                    for(String time : session.allTimes)
-                    {
-                        List<String> assignedPersons = new ArrayList<>();
-
-                        if(session.assignedShift.containsKey(date))
-                        {
-                            Map<String,List<String>> dateMapAssigned = session.assignedShift.get(date);
-                            if(dateMapAssigned.containsKey(time)){assignedPersons = dateMapAssigned.get(time);}
-                        }
-
-                        previewTable.append("<tr>");
-
-                        previewTable.append("<td>");
-                        previewTable.append(time);
-                        previewTable.append("</td>");
-
-                        for(int i = 0; i < session.slotLimit; i++)
-                        {
-                            previewTable.append("<td>");
-                            if(i < assignedPersons.size()){previewTable.append(assignedPersons.get(i));}
-                            previewTable.append("</td>");
-                        }
-
-                        previewTable.append("</tr>");
-                    }
-
-                    previewTable.append("</table><br></br>");
-                    previewTableMap.put(date,previewTable);
-                }
+                //シフト表プレビュー生成
+                Map<String,StringBuilder> previewTableMap = buildPreviewTable(session,shiftTable);
 
                 StringBuilder allShiftTables = new StringBuilder();
                 allShiftTables.append("<div>");
 
-                //エクセル出力用ボタン生成
-                allShiftTables.append(
-                    "<div style='display:flex; gap:10px; margin-bottom15px;'>" +
-
-                    "<form method='POST' action='/export'>" +
-                    "<input type='submit' value='Excel出力'>" +
-                    "</form>" +
-
-                    "<form method='POST' action='/exportImage'>" +
-                    "<input type='submit' value='画像として保存'>" +
-                    "</form>" +
-
-                    "</div>"
-                );
+                //buildExportButtonメソッド呼び出し
+                allShiftTables.append(buildExportButton());
                 
                 boolean firstButton = true;
                 
@@ -663,26 +678,22 @@ public class makeShift
                     "async function assignedPerson(date,time,person){" +
                         "const params =" + 
                         "'date='+encodeURIComponent(date)" +
-                        "'&time='+encodeURIComponent(time)" +
-                        "'&person='+encodeURIComponent(person);" +
+                        "+'&time='+encodeURIComponent(time)" +
+                        "+'&person='+encodeURIComponent(person);" +
 
-                        "try{" +
-                                "const res = await fetch('/assign'," +
+                        "await fetch('/assign'," +
+                            "{" +
+                                "method:'POST'," +
+                                "headers:" +
                                 "{" +
-                                    "method:'POST'," +
-                                    "headers:" +
-                                    "{" +
-                                        "'Content-Type':" +
-                                        "'application/x-www-form-urlencoded'" +
-                                    "}," +
-                                    "body:params" +
-                                "}" +
-                            ");" +
-                            "console.log(res.status);" +
-                            "if(res.ok){location.reload();}" +
-                            "else{alert('assign failed :' + res.status);" +
-                        "}catch(e){alert(e);console.log(e);}" +
-                        "}" +
+                                    "'Content-Type':" +
+                                    "'application/x-www-form-urlencoded'" +
+                                "}," +
+                                "body:params" +
+                            "}" +
+                        ");" +
+                    "location.reload();" +
+                    "}" +
 
                     "window.onload = function()" +
                     "{" +
@@ -711,58 +722,47 @@ public class makeShift
 
         server.createContext("/assign",(HttpExchange exchange) ->
         {
-            try
-            {
-                Session session = getsession(exchange);
+            Session session = getsession(exchange);
   
-                InputStream is = exchange.getRequestBody();
+            InputStream is = exchange.getRequestBody();
 
-                String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
+            String data = new String(is.readAllBytes(),StandardCharsets.UTF_8);
 
-                Map<String,String> formData = parseFormData(data);
+            Map<String,String> formData = parseFormData(data);
             
-                String date = formData.get("date");
-                String time = formData.get("time");
-                String person = formData.get("person");
+            String date = formData.get("date");
+            String time = formData.get("time");
+            String person = formData.get("person");
 
-                if(!session.assignedShift.containsKey(date)){session.assignedShift.put(date,new LinkedHashMap<>());}
-                if(!session.assignedShift.get(date).containsKey(time)){session.assignedShift.get(date).put(time,new ArrayList<>());}
+            if(!session.assignedShift.containsKey(date)){session.assignedShift.put(date,new LinkedHashMap<>());}
+            if(!session.assignedShift.get(date).containsKey(time)){session.assignedShift.get(date).put(time,new ArrayList<>());}
             
             
-                List<String> assignedList = session.assignedShift.get(date).get(time);
+            List<String> assignedList = session.assignedShift.get(date).get(time);
             
-                //その日の最大担当回数を記録
-                int assignedCount = 0;
-                if(session.assignedShift.containsKey(date))
-                {
-                    Map<String,List<String>> assignedDate = session.assignedShift.get(date);
-
-                    for(List<String> persons : assignedDate.values())
-                    {if(persons.contains(person)){assignedCount++;}}
-                }
-
-                //登録済みなら解除する
-                if(assignedList.contains(person)){assignedList.remove(person);}
-                //未登録なら登録する
-                else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
-
-                String response= "OK";
-
-                    exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
-                    exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
-
-                    OutputStream os = exchange.getResponseBody();
-                    os.write(response.getBytes(StandardCharsets.UTF_8));
-                    os.close();
-            }catch(Exception e)
+            //その日の最大担当回数を記録
+            int assignedCount = 0;
+            if(session.assignedShift.containsKey(date))
             {
-                e.printStackTrace();
-                String response = "ERROR";
-                exchange.sendResponseHeaders(500,response.length());
+                Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+
+                for(List<String> persons : assignedDate.values())
+                {if(persons.contains(person)){assignedCount++;}}
+            }
+
+            //登録済みなら解除する
+            if(assignedList.contains(person)){assignedList.remove(person);}
+            //未登録なら登録する
+            else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
+
+            String response= "OK";
+
+                exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
+                exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
+
                 OutputStream os = exchange.getResponseBody();
                 os.write(response.getBytes(StandardCharsets.UTF_8));
                 os.close();
-            }
         });
 
         //シフト表をExcelで出力する用

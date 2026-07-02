@@ -1,11 +1,11 @@
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+FROM maven:3.9.9-eclipse-temurin-25 AS build
 
 WORKDIR /app
 COPY . .
 
 RUN mvn package
 
-FROM eclipse-temurin:17-jdk
+FROM eclipse-temurin:25-jdk
 
 WORKDIR /app
 

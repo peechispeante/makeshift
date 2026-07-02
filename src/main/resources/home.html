@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset='UTF-8'>
+        <link rel="stylesheet" href="/style.css">
+        <title>シフト作成</title>
+        <h2>-使い方-</h2>
+        <h4>(1)Google Formsの「回答」タブを選択し，「スプレッドシートで表示」をタップ。<br>
+        (2)スプレッドシートのリンクをコピーし，下の貼付欄にペーストする。<br>
+        (3)各時間帯の人数上限と各日の最大担当回数を指定する。(半角整数)</h4>
+    </head>
+
+    <hr>
+
+    <body>
+        <form method="POST" action="/submit">
+            <table>
+                <tr>
+                    <div class="urlArea">
+                        <input type="text" name="sheetUrl" size="70" class="urlInput" placeHolder="Google Spread SheetのURLを入力してください。">
+                        <input type="submit" value="送信" class="submitButton">
+                    </div>        
+                </tr>
+
+                <tr>    
+                    <td>各時間帯の最大人数を整数で入力してください。</td>
+                    <td><input type="number" name="slotLimit" value="2" min="1" max="20"></td>
+                </tr>    
+
+                <tr>
+                    <td>同じ日の最大担当回数を入力してください。</td>
+                    <td><input type="number" name="dailyLimit" value="2" min="1" max="20"></td>
+                </tr>
+            </table>
+        </form>
+        <br><br>
+    </body>
+</html>
