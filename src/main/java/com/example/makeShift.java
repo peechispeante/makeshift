@@ -615,7 +615,9 @@ public class makeShift
 
                                 shiftResult.append(
                                     "<button type='button'" + 
-                                    "onclick=\"assignedPerson('" + date + "','" + time + "','" + personName +  "')\"" +
+                                    "data-date='" + date + "'" +
+                                    "data-time='" + time + "'" +
+                                    "data-person='" + personName + "'" +
                                     "style='background:" + color + ";'" + disabled + ">" + personName + "(" + grade + ")" +
                                     "</button>" );
 
@@ -748,14 +750,20 @@ public class makeShift
             //未登録なら登録する
             else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
 
-            String response= "OK";
+            boolean selected = assignedList.contains(person);
+            String response=
+            "{" +
+                "\"selected\":" + selected + "," +
+                "\"count\":" + assignedList.size() + 
+            "}";
 
-                exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
-                exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
 
-                OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes(StandardCharsets.UTF_8));
-                os.close();
+            exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
+            exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
+
+            OutputStream os = exchange.getResponseBody();
+            os.write(response.getBytes(StandardCharsets.UTF_8));            
+            os.close();
         });
 
         //シフト表をExcelで出力する用

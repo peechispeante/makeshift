@@ -31,7 +31,7 @@ async function assignedPerson(date,time,person){
     "&time="+encodeURIComponent(time) 
     "&person="+encodeURIComponent(person); 
 
-    await fetch("/assign", 
+    const res = await fetch("/assign", 
     { 
         method:"POST", 
         headers: 
@@ -41,8 +41,11 @@ async function assignedPerson(date,time,person){
         }, 
         body:params 
     } );
-    
-    location.reload(); 
+    const data = await res.text();
+
+    const data = await res.jason();
+    updateButton(date,time,person,data);
+
 } 
 
 window.onload = function() 
@@ -51,3 +54,31 @@ window.onload = function()
     var buttonId = localStorage.getItem("activeButton"); 
     if(tabId && buttonId){openTab(tabId,buttonId);} 
 } 
+
+document.addEventListener("DOMContentLoaded", () =>
+{
+    document.querySelectorAll("#assignArea button").forEach(btn =>
+    {
+        btn.addEventListener("click",async () =>
+        {
+           const date = btn.date.dataset.date;
+           const time = btn.dataset.time;
+           const person = btn.dataset.person;
+           
+           await assignedPerson(date,time,person);
+        });
+    });
+});
+
+function updateButton(date,time,person,data)
+{
+    const buttons = document.querySelectorAll("button");
+    buttons.forEach(btn =>
+    {
+        if(btn.dataset.date === date && btn.dataset.time === time && btn.dataset.person === person)
+        {
+            if(data.selected){btn.style.background = "#808080";}
+            else{btn.style.background = "#FFFFFF";}
+        }
+    });
+}
