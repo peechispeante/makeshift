@@ -1,3 +1,11 @@
+/*複数個所で共通の値を扱う用*/
+:root{
+    --preview-width : 60vw;
+    --tab-width : 40px;
+    --total-width : calc(var(var(--preview-width) + var(--tab-width)));
+}
+
+
 .urlArea{
     display: flex;
 }
@@ -15,4 +23,57 @@
     padding: 0 20px;
     font-size: 16px;
     box-sizing: border-box;
+}
+
+#previewButton{
+    position:absolute;
+    border-top:1px solid #bbb;
+    border-left:1px solid #bbb;
+    border-bottom:1px solid #bbb;
+    border-right:none;
+    border-radius: 20px 0 0 20px;
+    background: #bbb;
+    right:var(--preview-width);
+    transform:translateY(50%);
+    width:var(--tab-width);
+    padding:12px;
+    z-index:1000;
+}
+
+#previewDrawer{
+    position:fixed;
+    top:0%;
+    right:0;
+    width:var(--total-width);
+    transform:translateX(var(--preview-width));
+    transition: 0.5s;
+}
+
+#previewDrawer.open{
+    transform:translateX(0%);
+}
+
+#previewPanel{
+    position:absolute;
+    top:0;
+    right:0px;
+    width:var(--preview-width);
+    height:100vh;
+    background:white;
+    overflow-y:auto;
+    box-shadow:-2px 0 8px rgba(0,0,0,0.2);
+    z-index:999;
+}
+
+
+
+/*スマホ用*/
+@media(max-width: 768px){
+    :root{
+        --preview-width : 30vw;
+    }
+
+    #previewPanel{
+        width:var(--preview-width);
+    }
 }

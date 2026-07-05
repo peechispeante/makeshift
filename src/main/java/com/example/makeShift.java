@@ -25,6 +25,7 @@ import java.io.OutputStream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLDecoder;
@@ -403,6 +404,18 @@ public class makeShift
         return getSession(sessionId);
     }
 
+    //html呼び出し用メソッド
+    private static String loadFile(String fileName) throws IOException
+    {
+        try(InputStream is = makeShift.class.getResourceAsStream("/" + fileName))
+        {
+            if(is == null){throw new FileNotFoundException(fileName);}
+            byte[] bytes = is.readAllBytes();
+
+            return new String(bytes,StandardCharsets.UTF_8);
+        }
+    }
+
     //シフト表のレイアウト用のクラス
     static class LayoutInfo
     {
@@ -443,6 +456,31 @@ public class makeShift
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT","8000"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port),0);
 
+        //JavaScriptを扱うためのコンテキスト
+        server.createContext("/JavaScript/submit.js",(exchange) ->
+        {
+            ///
+            System.out.println(makeShift.class.getResource("/JavaScript/submit.js"));
+
+            InputStream is = makeShift.class.getResourceAsStream("/JavaScript/submit.js");
+            
+            ///
+            if(is == null)
+            {
+                System.out.println("見つからない");
+                exchange.sendResponseHeaders(404, -1);
+            }
+
+            byte[] bytes = is.readAllBytes();
+
+            exchange.getResponseHeaders().set("Content-Type","application/javascript; charset=UTF-8");
+            exchange.sendResponseHeaders(200,bytes.length);
+
+            OutputStream os = exchange.getResponseBody();
+            os.write(bytes);
+            os.close();
+        });
+
         //CSSを扱うためのコンテキスト
         server.createContext("/style.css",(HttpExchange exchange) ->
         {
@@ -461,11 +499,12 @@ public class makeShift
         //URL入力前のブラウザ画面の構成
         server.createContext("/",(HttpExchange exchange) ->
         {
-            InputStream is = makeShift.class.getResourceAsStream("/home.html");
-            String response = new String(is.readAllBytes(),StandardCharsets.UTF_8);
-
+            String response = loadFile("html/home.html");
             byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+
+            exchange.getResponseHeaders().set("Content-Type","text/html; charset=UTF-8");            
             exchange.sendResponseHeaders(200,bytes.length);
+
             OutputStream os = exchange.getResponseBody();
             os.write(bytes);
             os.close();
@@ -474,6 +513,7 @@ public class makeShift
         //URL入力後のブラウザ画面の構成
         server.createContext("/submit",(HttpExchange exchange) ->
             {
+            
                 Session session = getsession(exchange);
                 //toCSVメソッドを呼び出す
                 String[] rows = toCSV(exchange,session);
@@ -600,7 +640,7 @@ public class makeShift
                 
                 for(String date : shiftTable.keySet())
                 {
-                    String tabId = "tab" + date.hashCode();
+                    String tabId = "tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
 
                     String bgColor = firstButton ? "#808080" : "#f0f0f0";
                     
@@ -624,7 +664,7 @@ public class makeShift
                 for(String date : shiftTable.keySet())
                 {
                     String display = firstTab ? "block" : "none" ;
-                    String tabId = "tab" + date.hashCode();
+                    String tabId = "tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
                     allShiftTables.append(
                         "<div id='" +
                         tabId +
@@ -657,59 +697,12 @@ public class makeShift
                 }
 
                 //ブラウザ側への返答用HTML
-                String response =
-                    "<html>" +
+                String response = loadFile("html/submit.html");
 
-                    //JavaScript
-                    "<head>" +
-                    "<script>" +
-                    "function openTab(tabId,buttonId){" +
-                        "console.log(tabId);" +
-                        "console.log(buttonId);" +
-                        "var tabs=document.getElementsByClassName('tabcontent');" +
-                        "for(var i=0;i<tabs.length;i++){" + "tabs[i].style.display='none';}" + 
-                        "var buttons = document.getElementsByClassName('tabButton');" +
-                        "for(var i=0;i<buttons.length;i++){buttons[i].style.background='#f0f0f0';}" +
-                        "document.getElementById(tabId).style.display='block';" + 
-                        "document.getElementById(buttonId).style.background='#808080';" +
-                        "localStorage.setItem('activeTab',tabId);" +
-                        "localStorage.setItem('activeButton',buttonId);" +
-                        "}" +
-                    "async function assignedPerson(date,time,person){" +
-                        "const params =" + 
-                        "'date='+encodeURIComponent(date)" +
-                        "+'&time='+encodeURIComponent(time)" +
-                        "+'&person='+encodeURIComponent(person);" +
+                response = response.replace("{{SLOT_LIMIT}}",String.valueOf(session.slotLimit));
+                response = response.replace("{{DAILY_LIMIT}}",String.valueOf(session.dailyLimit));
+                response = response.replace("{{ALL_SHIFTTABLES}}",allShiftTables.toString());
 
-                        "await fetch('/assign'," +
-                            "{" +
-                                "method:'POST'," +
-                                "headers:" +
-                                "{" +
-                                    "'Content-Type':" +
-                                    "'application/x-www-form-urlencoded'" +
-                                "}," +
-                                "body:params" +
-                            "}" +
-                        ");" +
-                    "location.reload();" +
-                    "}" +
-
-                    "window.onload = function()" +
-                    "{" +
-                        "var tabId = localStorage.getItem('activeTab');" +
-                        "var buttonId = localStorage.getItem('activeButton');" +
-                        "if(tabId && buttonId){openTab(tabId,buttonId);}" +
-                    "}" +
-                    "</script>" +
-                    "</head>" +
-
-                    "<body>" +
-                    "<p>上限人数:" + session.slotLimit + "</p>" + 
-                    "<p>上限回数:" + session.dailyLimit + "</p>" +
-                    allShiftTables.toString() +
-                    "</body>" +
-                    "</html>";
 
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
                 exchange.sendResponseHeaders(200,response.getBytes().length);

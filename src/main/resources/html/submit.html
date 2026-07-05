@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>シフト作成</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/JavaScript/submit.js"></script>
+</head>
+
+<body>
+
+<p>上限人数:{{SLOT_LIMIT}}</p>
+<p>上限回数:{{DAILY_LIMIT}}</p>
+{{ALL_SHIFTTABLES}}
+
+<div id="assignArea">
+{{ASSIGN_AREA}}
+</div>
+
+<div id="previewDrawer">
+    <button id="previewButton" onclick="togglePreview()"><<</button>
+    <div id="previewPanel">  
+    {{PREVIEW_TABLE}}  
+    </div>
+</div>
+
+</body>
+</html>
