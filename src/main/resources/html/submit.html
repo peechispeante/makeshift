@@ -4,25 +4,23 @@
     <meta charset="UTF-8">
     <title>シフト作成</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="/JavaScript/submit.js"></script>
 </head>
 
-<body>
+<body
+    data-slot-limit = {{SLOT_LIMIT}}
+    data-daily-limit = {{DAILY_LIMIT}}>
 
-<p>上限人数:{{SLOT_LIMIT}}</p>
-<p>上限回数:{{DAILY_LIMIT}}</p>
-{{ALL_SHIFTTABLES}}
+<p>上限人数:{{SLOT_LIMIT}}　　上限回数:{{DAILY_LIMIT}}</p>
 
 <div id="assignArea">
-{{ASSIGN_AREA}}
+{{ALL_SHIFTTABLES}}
 </div>
-
 <div id="previewDrawer">
     <button id="previewButton" onclick="togglePreview()"><<</button>
     <div id="previewPanel">  
     {{PREVIEW_TABLE}}  
     </div>
 </div>
-
+    <script src="/JavaScript/submit.js"></script>
 </body>
 </html>

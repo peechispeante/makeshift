@@ -56,7 +56,7 @@ class Session
     int dailyLimit = 2;
     //ボタン・表の時間帯の順番を固定
     List<String> allTimes = new ArrayList<>();
-    List<String>allDates = new ArrayList<>();
+    List<String> allDates = new ArrayList<>();
     //シフト表を生成
     Map<String,Map<String,List<String>>> currentShiftTable = new LinkedHashMap<>();
 }
@@ -272,28 +272,42 @@ public class makeShift
         return shiftTable;
     }
 
-    //追い出しが左右どちらかしか選択できないようにするメソッド
-    public static boolean checkOidashi(Session session,String date,String time,String personName)
+    //日付タブボタン用メソッド
+    public static StringBuilder buildDateTabs(Map<String,Map<String,List<String>>> shiftTable, String targetedTab, String target, boolean previewLayout)
     {
-        if(time.equals("追い出し(左)"))
+        StringBuilder dateTabs = new StringBuilder();
+        
+        if(previewLayout){dateTabs.append("<div class='previewDateTabs'>");}
+        else{dateTabs.append("<div>");}
+        
+        boolean firstButton = true;
+                
+        for(String date : shiftTable.keySet())
         {
-            Map<String,List<String>> assignedDate = session.assignedShift.get(date);
-            if(assignedDate != null)
-            {
-                List<String> rightAssigned = assignedDate.get("追い出し(右)");
-                if(rightAssigned != null && rightAssigned.contains(personName)){return true;}   
-            }
+            String tabId = target + "Tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
+            String buttonId = "btn_" + tabId;
+            String buttonClass = target + "TabButton";
+            String buttonStyle;
+            String selected = firstButton ? "true" : "false";
+            
+            buttonStyle =
+                "padding:8px 16px;" +
+                "border:1px solid #888;" +
+                "cursor:pointer;";
+           
+            dateTabs.append
+            (
+                "<button type='button'" + "class='" + buttonClass + "'" + 
+                "id='" + buttonId + "' " + 
+                "data-selected='" + selected + "'" +
+                "onclick=\"" + targetedTab + "('" + tabId + "','" + buttonId + "')\" " +
+                "style='" + buttonStyle + "'>" + date + 
+                "</button>"
+            );
+            firstButton = false;
         }
-        if(time.equals("追い出し(右)"))
-        {
-            Map<String,List<String>> assignedDate = session.assignedShift.get(date);
-            if(assignedDate != null)
-            {
-                List<String> leftAssigned = assignedDate.get("追い出し(左)");                   
-                if(leftAssigned != null && leftAssigned.contains(personName)){return true;}
-            }
-        }
-        return false;
+        dateTabs.append("</div>");
+        return dateTabs;
     }
 
     //elsx,pngを出力するためのボタン用メソッド
@@ -314,51 +328,6 @@ public class makeShift
             "</div>"
         );
         return exportButton;
-    }
-
-    //シフト表プレビュー生成用メソッド
-    public static Map<String,StringBuilder> buildPreviewTable(Session session,Map<String,Map<String,List<String>>> shiftTable)
-    {
-        Map<String,StringBuilder> previewTableMap = new LinkedHashMap<>();
-        for(String date : shiftTable.keySet())
-        {
-            StringBuilder previewTable = new StringBuilder();
-
-            previewTable.append("<table border='1' style='border-collapse; text-align:center;'>");
-            previewTable.append("<tr>");
-            previewTable.append("<th></th>");
-
-            for(int i = 1; i <= session.slotLimit; i++){previewTable.append("<th></th>");}
-
-            previewTable.append("</tr>");
-
-            for(String time : session.allTimes)
-            {
-                List<String> assignedPersons = new ArrayList<>();
-
-                if(session.assignedShift.containsKey(date))
-                {
-                    Map<String,List<String>> dateMapAssigned = session.assignedShift.get(date);
-                    if(dateMapAssigned.containsKey(time)){assignedPersons = dateMapAssigned.get(time);}
-                }
-
-                previewTable.append("<tr>");
-                previewTable.append("<td>");
-                previewTable.append(time);
-                previewTable.append("</td>");
-
-                for(int i = 0; i < session.slotLimit; i++)
-                {
-                    previewTable.append("<td style='min-width:90px;'>");
-                    if(i < assignedPersons.size()){previewTable.append(assignedPersons.get(i));}
-                    previewTable.append("</td>");
-                }
-                previewTable.append("</tr>");
-            }
-            previewTable.append("</table><br></br>");
-            previewTableMap.put(date,previewTable);
-        }
-        return previewTableMap;
     }
 
     //Sessionを取得する
@@ -584,41 +553,18 @@ public class makeShift
                                     }
                                 }
                                 
-                                int assignedCount = 0;
-                                if(session.assignedShift.containsKey(date))
-                                {
-                                    Map<String,List<String>> assignedDate = session.assignedShift.get(date);
 
-                                    for(List<String> assignedPersons : assignedDate.values())
-                                        {
-                                            if(assignedPersons.contains(personName)){assignedCount++;}
-                                        } 
-                                }
-                                
+
                                 
                                 boolean selected = assigned != null && assigned.contains(personName);
-                                boolean full = assigned != null && assigned.size() >=session.slotLimit;
-
-                                boolean overDaily = assignedCount >= session.dailyLimit;
-                                        
-                                //追い出し関連のcheckOidashiメソッド呼び出し
-                                boolean selectedOtherOidashi = checkOidashi(session,date,time,personName);
-
-                                String disabled = "";
-                                
-                                if((full && !selected) || (overDaily && !selected) || selectedOtherOidashi){disabled = " disabled";}
-
-                                String color;
-                                if(selected){color = "#808080";}
-                                else if(full || overDaily || selectedOtherOidashi){color = "#D3D3D3";}
-                                else{color = "#FFFFFF";}
-
                                 shiftResult.append(
                                     "<button type='button'" + 
                                     "data-date='" + date + "'" +
                                     "data-time='" + time + "'" +
                                     "data-person='" + personName + "'" +
-                                    "style='background:" + color + ";'" + disabled + ">" + personName + "(" + grade + ")" +
+                                    "data-selected='" + selected + "'" +
+                                    "data-disabled='false'" +
+                                    ">" + personName + "(" + grade + ")" +
                                     "</button>" );
 
                             }
@@ -629,48 +575,25 @@ public class makeShift
                     shiftResult.append("<br>");
                     shiftResultMap.put(date,shiftResult);
                 }
-                //シフト表プレビュー生成
-                Map<String,StringBuilder> previewTableMap = buildPreviewTable(session,shiftTable);
-
                 StringBuilder allShiftTables = new StringBuilder();
                 allShiftTables.append("<div>");
 
                 //buildExportButtonメソッド呼び出し
                 allShiftTables.append(buildExportButton());
-                
-                boolean firstButton = true;
-                
+
+                //タブボタン用メソッド呼び出し
+                allShiftTables.append(buildDateTabs(shiftTable,"changeAssignTab","assign",false));
+
+                //担当者選択側のタブボタンとその中身
+                boolean firstAssignTab = true;
                 for(String date : shiftTable.keySet())
                 {
-                    String tabId = "tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
-
-                    String bgColor = firstButton ? "#808080" : "#f0f0f0";
-                    
-                    allShiftTables.append
-                    (
-                        "<button type='button' class='tabButton'" + "id='btn_" + tabId + "' " + "onclick=\"openTab('" + tabId +"','btn_" + tabId + "')\" " +
-                        "style='padding:8px 16px;" +
-                        "border:1px solid #888;" +
-                        "background:" + bgColor + ";" +
-                        "margin-right:2px;" +
-                        "cursor:pointer;'>" +
-                        date + 
-                        "</button>"
-                    );
-                    firstButton = false;
-                }
-                allShiftTables.append("</div><br>");
-
-                boolean firstTab = true;
-                
-                for(String date : shiftTable.keySet())
-                {
-                    String display = firstTab ? "block" : "none" ;
-                    String tabId = "tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
+                    String display = firstAssignTab ? "block" : "none" ;
+                    String tabId = "assignTab_" + date.replaceAll("[^a-zA-Z0-9]","_");
                     allShiftTables.append(
                         "<div id='" +
                         tabId +
-                        "' class='tabcontent' style='display:" +
+                        "' class='assignTabContent' style='display:" +
                         display +
                         ";" +
                         "border:2px solid #888;" +
@@ -684,19 +607,83 @@ public class makeShift
                         "padding:10px;" +
                         "margin-bottom:15px;'>"
                     );
-                    allShiftTables.append("<h3>シフト表確認</h3>");
+                    allShiftTables.append("<h4>担当者を選択してください。</h4>");
                     allShiftTables.append(shiftResultMap.get(date));
                     allShiftTables.append("</div>");
 
                     allShiftTables.append("<div style='border:1px solid:#ccc;" + "padding:10px;'>");
-                    allShiftTables.append("<h3>シフト表プレビュー</h3>");
-                    allShiftTables.append(previewTableMap.get(date));
                     allShiftTables.append("</div>");
 
                     allShiftTables.append("</div>");
 
-                    firstTab = false;
+                    firstAssignTab = false;
                 }
+
+                StringBuilder previewArea = new StringBuilder();
+                //preview側の日付タブとその中身
+                previewArea.append(buildDateTabs(shiftTable, "changePreviewTab","preview",true));
+                boolean firstPreviewTab = true;
+                for(String date : shiftTable.keySet())
+                {
+                    String display = firstPreviewTab ? "block" : "none";
+                    String tabId = "previewTab_" + date.replaceAll("[^a-zA-Z0-9]","_");
+
+                    previewArea.append(
+                        "<div id='" + tabId + "'" +
+                        " class='previewTabContent'" +
+                        " style='display:" + display + ";'>"
+                    );
+                    //プレビュー生成
+                    previewArea.append("<table>");
+                    previewArea.append("<tr>");
+                    previewArea.append("<th>");
+                    previewArea.append(date);
+                    previewArea.append("</th>");
+
+                    for(int i=0; i<session.slotLimit; i++)
+                    {
+                        previewArea.append("<th></th>");
+                    }
+                    previewArea.append("</tr>");
+
+                    for(String time : session.allTimes)
+                    {
+                        previewArea.append("<tr>");
+                        previewArea.append("<td>");
+                        previewArea.append(time);
+                        previewArea.append("</td>");
+
+                        List<String> assignedPersons = new ArrayList<>();
+
+                        if(session.assignedShift.containsKey(date))
+                        {
+                            Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+                            if(assignedDate.containsKey(time)){assignedPersons = assignedDate.get(time);}
+                        }
+                        for(int i=0; i<session.slotLimit; i++)
+                        {
+                            String cellId = "preview_" +
+                                date.replaceAll("[^a-zA-Z0-9]","_") + "_" +
+                                time.replaceAll("[^a-zA-Z0-9]","_") + "_" + i; 
+                            previewArea.append("<td id='" + cellId + "'>");
+                            if(i<assignedPersons.size()){previewArea.append(assignedPersons.get(i));}
+                            previewArea.append("</td>");
+                        }
+                        previewArea.append("</tr>");
+                    }
+                    previewArea.append("</table>");
+                    previewArea.append("</div>");
+                    firstPreviewTab = false;
+                }
+                //スライドボタン生成
+                previewArea.append(
+                    "<div class='tabSlideButton' style='padding:10px; border-bottom:1px solid #ccc;'>" +
+                    "<label>" +
+                    "<input type='checkbox' id='uniformTabs' checked>" +
+                    " 日付タブの選択状況を統一する" +
+                    "</label>" +
+                    "</div>"
+                );                
 
                 //ブラウザ側への返答用HTML
                 String response = loadFile("html/submit.html");
@@ -704,7 +691,7 @@ public class makeShift
                 response = response.replace("{{SLOT_LIMIT}}",String.valueOf(session.slotLimit));
                 response = response.replace("{{DAILY_LIMIT}}",String.valueOf(session.dailyLimit));
                 response = response.replace("{{ALL_SHIFTTABLES}}",allShiftTables.toString());
-
+                response = response.replace("{{PREVIEW_TABLE}}",previewArea.toString());
 
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
                 exchange.sendResponseHeaders(200,response.getBytes().length);
@@ -750,15 +737,90 @@ public class makeShift
             //未登録なら登録する
             else if((assignedList.size() < session.slotLimit) && (assignedCount < session.dailyLimit)){assignedList.add(person);}
 
+            assignedCount = 0;
+            if(session.assignedShift.containsKey(date))
+            {
+                Map<String,List<String>> assignedDate = session.assignedShift.get(date);
+                for(List<String> persons : assignedDate.values())
+                {
+                    if(persons.contains(person)){assignedCount++;}
+                }
+            }
             boolean selected = assignedList.contains(person);
+
+            /* 
+            //disabledを管理するJson
+            StringBuilder disabledJson = new StringBuilder();
+            disabledJson.append("[");
+
+            boolean firstDisabled = true;
+
+            if(assignedList.size() >= session.slotLimit)
+            {
+                disabledJson.append("{");
+                disabledJson.append("\"type\":\"slotLimit\",");
+                disabledJson.append("\"date\":\"").append(date).append("\",");
+                disabledJson.append("\"time\":\"").append(time).append("\"");
+                disabledJson.append("}");
+
+                firstDisabled = false;
+            }
+
+            if(assignedCount >= session.dailyLimit)
+            {
+                if(!firstDisabled){disabledJson.append(",");}
+
+                disabledJson.append("{");
+                disabledJson.append("\"type\":\"dailyLimit\",");
+                disabledJson.append("\"date\":\"").append(date).append("\",");
+                disabledJson.append("\"person\":\"").append(person).append("\"");
+                disabledJson.append("}");
+
+                firstDisabled = false;
+            }
+
+            if(time.equals("追い出し(左)") || time.equals("追い出し(右)"))
+            {
+                if(!firstDisabled){disabledJson.append(",");}
+
+                String otherTime;
+                if(time.equals("追い出し(左)")){otherTime = "追い出し(右)";}
+                else{otherTime = "追い出し(左)";}
+
+                disabledJson.append("{");
+                disabledJson.append("\"type\":\"selectedOtherOidashi\",");
+                disabledJson.append("\"date\":\"").append(date).append("\",");
+                disabledJson.append("\"time\":\"").append(otherTime).append("\",");
+                disabledJson.append("\"person\":\"").append(person).append("\"");
+                disabledJson.append("}");
+
+                firstDisabled = false;
+            }
+            disabledJson.append("]");
+            */
+
+            StringBuilder personsJson = new StringBuilder();
+            personsJson.append("[");
+            for(int i=0; i<assignedList.size(); i++)
+            {
+                if(i>0){personsJson.append(",");}
+                personsJson.append("\"");
+                personsJson.append(assignedList.get(i));
+                personsJson.append("\"");
+            }
+            personsJson.append("]");
+
             String response=
             "{" +
                 "\"selected\":" + selected + "," +
-                "\"count\":" + assignedList.size() + 
+                "\"count\":" + assignedList.size() + "," +
+                "\"date\":\"" + date + "\"," +
+                "\"time\":\"" + time + "\"," +
+                "\"persons\":" + personsJson.toString() + /*"," +
+                "\"disabledJson\":" + disabledJson.toString() + */
             "}";
 
-
-            exchange.getResponseHeaders().set("Content-type","text/html; charset=UTF-8");
+            exchange.getResponseHeaders().set("Content-type","application/json; charset=UTF-8");
             exchange.sendResponseHeaders(200,response.getBytes(StandardCharsets.UTF_8).length);
 
             OutputStream os = exchange.getResponseBody();
