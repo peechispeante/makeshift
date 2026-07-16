@@ -284,6 +284,15 @@ public class makeShift
                 
         for(String date : shiftTable.keySet())
         {
+            String buttonLabel = date;
+            if(previewLayout)
+            {
+                int start = date.indexOf("(");
+                int end = date.indexOf(")");
+
+                if(start != -1 && end != -1 && end > start){buttonLabel = date.substring(start+1,end);}
+            }
+
             String tabId = target + "Tab_" + date.replaceAll("[^a-zA-Z0-9]","_");
             String buttonId = "btn_" + tabId;
             String buttonClass = target + "TabButton";
@@ -301,7 +310,7 @@ public class makeShift
                 "id='" + buttonId + "' " + 
                 "data-selected='" + selected + "'" +
                 "onclick=\"" + targetedTab + "('" + tabId + "','" + buttonId + "')\" " +
-                "style='" + buttonStyle + "'>" + date + 
+                "style='" + buttonStyle + "'>" + buttonLabel + 
                 "</button>"
             );
             firstButton = false;

@@ -88,12 +88,14 @@
 }
 
 .previewDateTabs{
-    width:max-content;
     display:flex;
 }
 
-.previewDateTabButton{
-    flex:1;padding:8px 0;
+.previewTabButton{
+    flex:none;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:elipsis;
     border:1px solid #888;
     margin:0;
     cursor:pointer;
@@ -173,7 +175,7 @@
 /*スマホ用*/
 @media(max-width: 480px){
     :root{
-        --preview-width : 30vw;
+        --preview-width : 25vw;
     }
 
     #previewPanel{

@@ -236,5 +236,16 @@ function adjustPreviewDateTabWidth()
     const tabs = document.querySelector(".previewDateTabs");
 
     if(table == null || tabs == null){return;}
-    tabs.style.width = table.offsetWidth + "px";
+
+    const width = table.offsetWidth;
+    tabs.style.width = width + "px";
+
+    const buttons = tabs.querySelectorAll(".previewTabButton");
+    const buttonWidth = width/buttons.length;
+    
+    buttons.forEach(btn =>
+    {
+        btn.style.width = buttonWidth + "px";
+    }
+    );
 }
