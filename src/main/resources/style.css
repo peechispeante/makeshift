@@ -158,7 +158,7 @@
     background:#808080;
 }
 #assignArea button[data-selected="false"][data-disabled="true"]{
-    background:#A9A9A9;
+    background:#C0C0C0;
 }
 
 /* 日付タブボタンの色設定 */
@@ -175,10 +175,23 @@
 /*スマホ用*/
 @media(max-width: 480px){
     :root{
-        --preview-width : 25vw;
+        --preview-width : 50vw;
+        --tab-width : 50px;
     }
 
     #previewPanel{
         width:var(--preview-width);
+    }
+    #previewPanel th,
+    #previewPanel td{
+        min-width:8em;
+        height:40px;
+        font-size:18px;
+        padding:8px;
+    }
+
+    .previewTabButton{
+        height:50px;
+        font-size:18px;
     }
 }
