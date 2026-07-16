@@ -1,6 +1,6 @@
 /*複数個所で共通の値を扱う用*/
 :root{
-    --preview-width : 60vw;
+    --preview-width : 42vw;
     --tab-width : 40px;
     --total-width : calc(var(--preview-width) + var(--tab-width));
 }
@@ -171,7 +171,7 @@
 
 
 /*スマホ用*/
-@media(max-width: 768px){
+@media(max-width: 480px){
     :root{
         --preview-width : 30vw;
     }

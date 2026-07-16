@@ -26,8 +26,6 @@ function openTab(tabId,buttonId){
 
 function openAssignTab(tabId,buttonId)
 {
-    console.log("openAssignTab", buttonId);
-
     const targetedTab = document.getElementById(tabId);
     const targetButton = document.getElementById(buttonId);
 
@@ -41,15 +39,10 @@ function openAssignTab(tabId,buttonId)
 
     document.getElementById(tabId).style.display = "block";
     document.getElementById(buttonId).dataset.selected = "true";
-
-    console.log(buttonId,getComputedStyle(targetButton).backgroundColor);
-    buttons.forEach(b=>{console.log(b.id,b.dataset.selected);});
 }
 
 function openPreviewTab(tabId,buttonId)
 {
-    console.log("openPreviewTab", buttonId);
-
     const targetedTab = document.getElementById(tabId);
     const targetButton = document.getElementById(buttonId);
 
@@ -66,6 +59,7 @@ function openPreviewTab(tabId,buttonId)
 }
 
 async function assignedPerson(btn){ 
+    console.log("assignedPerson",btn);
     if(btn.dataset.disabled === "true" && btn.dataset.selected !== "true"){return;}
 
     const date = btn.dataset.date;
@@ -154,7 +148,6 @@ function refreshDisabled(date)
         {
             btn.dataset.disabled = "false";
         }
-        console.log(btnPerson,disabled,btn.style.background);
     });
 } 
 
@@ -169,10 +162,11 @@ window.onload = function()
 
 document.addEventListener("DOMContentLoaded", () =>
 {
-    document.querySelectorAll("#assignArea button").forEach(btn =>
+    document.querySelectorAll("#assignArea button[data-date][data-time][data-person]").forEach(btn =>
     {
         btn.addEventListener("click",async () =>
         {
+            console.log("assignedPerson",btn);
             await assignedPerson(btn);
         });
     });
