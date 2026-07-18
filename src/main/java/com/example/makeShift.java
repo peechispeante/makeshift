@@ -499,7 +499,7 @@ public class makeShift
                 Session session = getsession(exchange);
                 //使用環境を取得
                 String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
-                boolean mobile = userAgent != null && (userAgent.contains("Android") || userAgent.contains("iphone"));
+                boolean mobile = userAgent != null && (userAgent.contains("Android") || userAgent.contains("iPhone"));
                 //toCSVメソッドを呼び出す
                 String[] rows = toCSV(exchange,session);
                 //ヘッダーを取り出す
@@ -1098,7 +1098,7 @@ public class makeShift
                 
                 String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
                 String ua = (userAgent == null)?"" : userAgent.toLowerCase();
-                boolean mobile = ua.contains("android") || ua.contains("iphone");
+                boolean mobile = ua.contains("android") || ua.contains("iPhone");
                 
                 LayoutInfo layout = new LayoutInfo(session);
                 List<String> dates = new ArrayList<>(session.currentShiftTable.keySet());
