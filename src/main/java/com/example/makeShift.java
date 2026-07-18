@@ -402,9 +402,9 @@ public class makeShift
         
         int horizontalOffset = 1;
         int verticalOffset = 2;
-        int timeWidth = 140;
-        int personWidth = 110;
-        int rowHeight = 28;
+        int timeWidth = 210;
+        int personWidth = 165;
+        int rowHeight = 42;
         int tableWidth(){return session.slotLimit+1;}
         int tableHeight(){return session.allTimes.size()+1;}
         int startCol(int d)
@@ -1006,13 +1006,18 @@ public class makeShift
                 }
 
                 //列幅自動調整用のおまじない
-                int centerGapCol = horizontalOffset + session.slotLimit +1;
-                for(int col = firstCol+1; col<=lastCol-1; col++)
+                for(int d = 0; d < dates.size(); d++)
                 {
-                    if(col == centerGapCol){continue;}
-                    sheet.autoSizeColumn(col);
-                    int width = sheet.getColumnWidth(col);
-                    sheet.setColumnWidth(col,Math.min(width+1000,255*256));
+                    int startCol = layout.startCol(d);
+                    sheet.autoSizeColumn(startCol);
+                    int width = sheet.getColumnWidth(startCol);
+                    sheet.setColumnWidth(startCol,Math.min(width+1000,255*256));
+                }
+                int personColumnWidth = 13*256;
+                for(int d = 0; d < dates.size(); d++)
+                {
+                    int startCol = layout.startCol(d);
+                    for(int i=1; i<=session.slotLimit; i++){sheet.setColumnWidth(startCol + i, personColumnWidth);}
                 }
 
                 //作成されるファイル名設定
@@ -1098,11 +1103,19 @@ public class makeShift
                 
                 Graphics2D g = image.createGraphics();
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS,RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+                g.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
+                g.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION,RenderingHints.VALUE_ALPHA_INTERPOLATION_QUALITY);
                 g.setColor(Color.WHITE);
                 g.fillRect(0,0,imageWidth,imageHeight);
 
-                Font font = new Font("Meiryo",Font.PLAIN,12);
-                Font dateFont = new Font("Meiryo",Font.BOLD,12);
+                InputStream is = makeShift.class.getResourceAsStream("/fonts/NotoSansJP-VariableFont_wght.ttf");
+
+                Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
+
+                Font font = baseFont.deriveFont(Font.PLAIN, 30f);
+                Font dateFont = baseFont.deriveFont(Font.BOLD,30f);
 
                 for(int d = 0; d<dates.size(); d++)
                 {
@@ -1118,7 +1131,7 @@ public class makeShift
                     g.fillRect(startX,startY,layout.timeWidth,layout.rowHeight);
                     g.setColor(Color.BLACK);
                     g.setFont(dateFont);
-                    g.drawString(date,startX+5,startY+18);
+                    g.drawString(date,startX+5,startY+34);
                     g.setFont(font);
 
                     int rowY = startY + layout.rowHeight;
@@ -1129,7 +1142,7 @@ public class makeShift
                         g.fillRect(startX,rowY,layout.timeWidth,layout.rowHeight);
                         g.setColor(Color.BLACK);
                         g.drawRect(startX,rowY,layout.timeWidth,layout.rowHeight);
-                        g.drawString(time,startX+5,rowY+18);
+                        g.drawString(time,startX+5,rowY+34);
 
                         List<String> persons = assignedDateMap.get(time);
                         for(int i=0; i<session.slotLimit; i++)
@@ -1141,7 +1154,7 @@ public class makeShift
                             g.setColor(Color.BLACK);
                             g.drawRect(x,rowY,layout.personWidth,layout.rowHeight);
 
-                            if(persons != null && i<persons.size()){g.drawString(persons.get(i),x+5,rowY+18);}
+                            if(persons != null && i<persons.size()){g.drawString(persons.get(i),x+5,rowY+34);}
                         }
                         rowY += layout.rowHeight;
                     }
