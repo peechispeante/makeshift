@@ -717,6 +717,7 @@ public class makeShift
                 response = response.replace("{{DAILY_LIMIT}}",String.valueOf(session.dailyLimit));
                 response = response.replace("{{ALL_SHIFTTABLES}}",allShiftTables.toString());
                 response = response.replace("{{PREVIEW_TABLE}}",previewArea.toString());
+                if(mobile){response = response.replace("{{PREVIEW_OPEN}}","open");}
 
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
                 exchange.sendResponseHeaders(200,response.getBytes().length);
