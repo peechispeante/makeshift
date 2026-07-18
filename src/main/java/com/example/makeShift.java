@@ -705,7 +705,7 @@ public class makeShift
                 {
                     previewArea.append(
                         "<div style='text-align:center; margin:20px 0; '>" +
-                        "<button id='saveImageButton'>画像を保存</button>" +
+                        "<button id='saveImageButton'type='button'>画像を保存</button>" +
                         "</div>"
                     );
                 }

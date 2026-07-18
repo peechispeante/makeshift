@@ -71,7 +71,9 @@
     width:var(--preview-width);
     height:100vh;
     background:white;
+    display:flex;
     display:inline-block;
+    flex-direction:column;
     overflow-x:auto;
     overflow-y:auto;
     box-shadow:-2px 0 8px rgba(0,0,0,0.2);
