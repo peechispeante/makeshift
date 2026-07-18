@@ -718,6 +718,7 @@ public class makeShift
                 response = response.replace("{{ALL_SHIFTTABLES}}",allShiftTables.toString());
                 response = response.replace("{{PREVIEW_TABLE}}",previewArea.toString());
                 if(mobile){response = response.replace("{{PREVIEW_OPEN}}","open");}
+                else{response = response.replace("{{PREVIEW_OPEN}}","");}
 
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
                 exchange.sendResponseHeaders(200,response.getBytes().length);
