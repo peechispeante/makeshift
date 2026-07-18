@@ -1,3 +1,12 @@
+const saveButton = document.getElementById("saveImageButton");
+if(saveButton)
+{
+    saveButton.onclick = function()
+    {
+        window.open("/exportImage","_blank");
+    };
+}
+
 function togglePreview()
 {
     const drawer = document.getElementById("previewDrawer");

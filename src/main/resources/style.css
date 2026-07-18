@@ -175,7 +175,7 @@
 /*スマホ用*/
 @media(max-width: 480px){
     :root{
-        --preview-width : 50vw;
+        --preview-width : 90vw;
         --tab-width : 50px;
     }
 

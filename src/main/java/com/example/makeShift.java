@@ -320,7 +320,7 @@ public class makeShift
     }
 
     //elsx,pngを出力するためのボタン用メソッド
-    public static StringBuilder buildExportButton()
+    public static StringBuilder buildExportButton(boolean mobile)
     {
         StringBuilder exportButton = new StringBuilder();
         exportButton.append(
@@ -328,14 +328,18 @@ public class makeShift
 
             "<form method='POST' action='/export'>" +
             "<input type='submit' value='Excel出力'>" +
-            "</form>" +
-
-            "<form method='POST' action='/exportImage'>" +
-            "<input type='submit' value='画像として保存'>" +
-            "</form>" +
-
-            "</div>"
+            "</form>"
         );
+        if(!mobile)
+        {
+            exportButton.append(
+                "<form method='POST' action='/exportImage'>" +
+                "<input type='submit' value='画像として保存'>" +
+                "</form>"
+            );
+        }
+        exportButton.append("</div>");
+
         return exportButton;
     }
 
@@ -493,6 +497,9 @@ public class makeShift
             {
             
                 Session session = getsession(exchange);
+                //使用環境を取得
+                String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+                boolean mobile = userAgent != null && (userAgent.contains("Android") || userAgent.contains("iphone"));
                 //toCSVメソッドを呼び出す
                 String[] rows = toCSV(exchange,session);
                 //ヘッダーを取り出す
@@ -588,7 +595,7 @@ public class makeShift
                 allShiftTables.append("<div>");
 
                 //buildExportButtonメソッド呼び出し
-                allShiftTables.append(buildExportButton());
+                allShiftTables.append(buildExportButton(mobile));
 
                 //タブボタン用メソッド呼び出し
                 allShiftTables.append(buildDateTabs(shiftTable,"changeAssignTab","assign",false));
@@ -693,6 +700,15 @@ public class makeShift
                     "</label>" +
                     "</div>"
                 );                
+                //スマホなら画像出力ボタン生成
+                if(mobile)
+                {
+                    previewArea.append(
+                        "<div style='text-align:center; margin:20px 0; '>" +
+                        "<button id='saaveImageButton'>画像を保存</button>" +
+                        "</div>"
+                    );
+                }
 
                 //ブラウザ側への返答用HTML
                 String response = loadFile("html/submit.html");
