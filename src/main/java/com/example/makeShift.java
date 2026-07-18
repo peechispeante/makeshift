@@ -705,7 +705,7 @@ public class makeShift
                 {
                     previewArea.append(
                         "<div style='text-align:center; margin:20px 0; '>" +
-                        "<button id='saaveImageButton'>画像を保存</button>" +
+                        "<button id='saveImageButton'>画像を保存</button>" +
                         "</div>"
                     );
                 }
@@ -1095,6 +1095,11 @@ public class makeShift
             try
             {
                 Session session = getsession(exchange);
+                
+                String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+                String ua = (userAgent == null)?"" : userAgent.toLowerCase();
+                boolean mobile = ua.contains("android") || ua.contains("iphone");
+                
                 LayoutInfo layout = new LayoutInfo(session);
                 List<String> dates = new ArrayList<>(session.currentShiftTable.keySet());
                 int leftMargin =20;
@@ -1207,7 +1212,10 @@ public class makeShift
                     fileName = "shift_" + firstName + "~" + lastName + ".png";
                 }
                 exchange.getResponseHeaders().set("Content-Type","image/png");
-                exchange.getResponseHeaders().set("Content-Disposition","attachment; fileName=" + fileName);
+                if(!mobile)
+                {
+                    exchange.getResponseHeaders().set("Content-Disposition","attachment; fileName=" + fileName);
+                }
                 exchange.sendResponseHeaders(200,pngBytes.length);
 
                 OutputStream os = exchange.getResponseBody();

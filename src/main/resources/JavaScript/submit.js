@@ -1,12 +1,3 @@
-const saveButton = document.getElementById("saveImageButton");
-if(saveButton)
-{
-    saveButton.onclick = function()
-    {
-        window.open("/exportImage","_blank");
-    };
-}
-
 function togglePreview()
 {
     const drawer = document.getElementById("previewDrawer");
@@ -171,6 +162,22 @@ window.onload = function()
 
 document.addEventListener("DOMContentLoaded", () =>
 {
+    const saveButton = document.getElementById("saveImageButton");
+    if(saveButton)
+    {
+        saveButton.onclick = async function()
+        {
+            const res = await fetch("/exportImage");
+            const blob = await res.blob();
+            const imageUrl = URL.createObjectURL(blob);
+            const savedImage = document.getElementById("savedImage");
+            savedImage.src = imageUrl;
+
+            document.getElementById("savedImageArea").style.display="block";
+            savedImage.onload = function(){URL.revokeObjectURL(imageUrl);};
+        };
+    }
+    
     document.querySelectorAll("#assignArea button[data-date][data-time][data-person]").forEach(btn =>
     {
         btn.addEventListener("click",async () =>

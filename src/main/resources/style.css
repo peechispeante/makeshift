@@ -113,6 +113,21 @@
     white-space: nowrap;
 }
 
+#savedImageArea{
+    display:none;
+    margin-top:20px;
+    text-align:center;
+}
+#savedImageArea p{
+    margin-bottom:10px;
+    font-size:14px;
+}
+#savedImage{
+    width:100%;
+    height:auto;
+    display:block;
+    border:1px solid #ccc;
+}
 
 /* スライドボタンのUI */
 .tabSlideButton {
