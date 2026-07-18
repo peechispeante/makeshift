@@ -5,6 +5,9 @@
     --total-width : calc(var(--preview-width) + var(--tab-width));
 }
 
+h4{
+    margin:1px;
+}
 
 .urlArea{
     display: flex;

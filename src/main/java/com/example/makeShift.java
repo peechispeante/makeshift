@@ -1099,7 +1099,7 @@ public class makeShift
                 
                 String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
                 String ua = (userAgent == null)?"" : userAgent.toLowerCase();
-                boolean mobile = ua.contains("android") || ua.contains("iPhone");
+                boolean mobile = ua.contains("android") || ua.contains("iphone");
                 
                 LayoutInfo layout = new LayoutInfo(session);
                 List<String> dates = new ArrayList<>(session.currentShiftTable.keySet());
